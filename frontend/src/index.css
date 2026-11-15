@@ -1,0 +1,46 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+  text-align: left;
+}
+
+h1 {
+  font-size: 1.8rem;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  padding: 8px;
+  max-width: 100%;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+  h1 {
+    font-size: 1.4rem;
+  }
+
+  nav {
+    flex-wrap: wrap;
+  }
+}
