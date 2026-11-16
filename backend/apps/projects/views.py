@@ -85,6 +85,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(ProjectSerializer(project, context={"request": request}).data)
 
 
+
 class AttachmentViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
@@ -101,32 +102,69 @@ class AttachmentViewSet(
                 Project.objects.select_related("assigned_expert__user"),
                 pk=self.kwargs["project_pk"],
             )
+
             if not can_view_project(self.request.user, project):
-                raise NotFound()  # 404 plutôt que 403 : on ne révèle pas l'existence
+                raise NotFound()
+
             self._project = project
+
         return self._project
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return ProjectAttachment.objects.none()
-        return ProjectAttachment.objects.filter(project=self.get_project())
+
+        return ProjectAttachment.objects.filter(
+            project=self.get_project()
+        )
 
     def perform_create(self, serializer):
         project = self.get_project()
         user = self.request.user
-        if not (is_project_owner(user, project) or is_assigned_expert(user, project)):
-            raise PermissionDenied("Vous ne pouvez pas ajouter de pièce jointe à ce dossier.")
-        if project.status in services.FROZEN_STATUSES:
-            raise ValidationError({"status": "Ce dossier est clos ou annulé."})
-        if project.attachments.count() >= MAX_ATTACHMENTS_PER_PROJECT:
-            raise ValidationError(
-                {"file": f"Maximum {MAX_ATTACHMENTS_PER_PROJECT} pièces jointes par dossier."}
+
+        allowed = (
+            is_admin(user)
+            or is_project_owner(user, project)
+            or is_assigned_expert(user, project)
+        )
+
+        if not allowed:
+            raise PermissionDenied(
+                "Vous ne pouvez pas ajouter de pièce jointe à ce dossier."
             )
+
+        if project.status in services.FROZEN_STATUSES:
+            raise ValidationError({
+                "status": "Ce dossier est clos ou annulé."
+            })
+
+        if project.attachments.count() >= MAX_ATTACHMENTS_PER_PROJECT:
+            raise ValidationError({
+                "file": (
+                    f"Maximum {MAX_ATTACHMENTS_PER_PROJECT} "
+                    "pièces jointes par dossier."
+                )
+            })
+
         serializer.save(project=project)
 
     def perform_destroy(self, instance):
         user = self.request.user
-        if not (is_admin(user) or is_project_owner(user, instance.project)):
-            raise PermissionDenied("Seul le propriétaire peut supprimer une pièce jointe.")
+
+        if not (
+            is_admin(user)
+            or is_project_owner(user, instance.project)
+        ):
+            raise PermissionDenied(
+                "Seul le propriétaire ou l'administrateur "
+                "peut supprimer une pièce jointe."
+            )
+
+        if instance.project.status in services.FROZEN_STATUSES:
+            raise ValidationError({
+                "status": "Impossible de supprimer un fichier de ce dossier."
+            })
+
         instance.file.delete(save=False)
         instance.delete()
+
