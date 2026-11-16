@@ -1,11 +1,13 @@
+
 import os
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.utils import timezone
 
 from .choices import ProjectDomain, ProjectStatus
+from .validators import validate_attachment, validate_consents
 
 
 def attachment_upload_path(instance, filename):
@@ -17,9 +19,11 @@ class Project(models.Model):
     """Dossier Projet créé par un Client."""
 
     owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="projects",
     )
-    # Renseigné par le matching / la prise de rendez-vous (P3)
+
     assigned_expert = models.ForeignKey(
         "experts.ExpertProfile",
         null=True,
@@ -27,17 +31,26 @@ class Project(models.Model):
         on_delete=models.SET_NULL,
         related_name="assigned_projects",
     )
+
     title = models.CharField(max_length=200)
     description = models.TextField()
+
     domain = models.CharField(
-        max_length=30, choices=ProjectDomain.choices, default=ProjectDomain.OTHER
+        max_length=30,
+        choices=ProjectDomain.choices,
+        default=ProjectDomain.OTHER,
     )
+
     status = models.CharField(
-        max_length=20, choices=ProjectStatus.choices, default=ProjectStatus.DRAFT
+        max_length=20,
+        choices=ProjectStatus.choices,
+        default=ProjectStatus.DRAFT,
     )
+
     consent_data_processing = models.BooleanField(default=False)
     consent_ai_analysis = models.BooleanField(default=False)
     consent_date = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -53,26 +66,50 @@ class Project(models.Model):
 
     @property
     def has_ai_consent(self):
-        """À vérifier par P5 avant tout envoi à un fournisseur d'IA."""
-        return self.consent_data_processing and self.consent_ai_analysis
+        return (
+            self.consent_data_processing
+            and self.consent_ai_analysis
+        )
 
-    def save(self, *args, **kwargs):
-        if (self.consent_data_processing or self.consent_ai_analysis) and not self.consent_date:
-            self.consent_date = timezone.now()
-        super().save(*args, **kwargs)
+    def clean(self):
+        super().clean()
+
+        validate_consents(
+            self.consent_data_processing,
+            self.consent_ai_analysis,
+        )
 
 
 class ProjectAttachment(models.Model):
+
     project = models.ForeignKey(
-        Project, on_delete=models.CASCADE, related_name="attachments"
+        Project,
+        on_delete=models.CASCADE,
+        related_name="attachments",
     )
-    file = models.FileField(upload_to=attachment_upload_path)
+
+    file = models.FileField(
+        upload_to=attachment_upload_path,
+        validators=[validate_attachment],
+    )
+
     original_name = models.CharField(max_length=255)
-    size = models.PositiveIntegerField(help_text="Taille en octets")
+
+    size = models.PositiveIntegerField(
+        editable=False,
+        help_text="Taille en octets",
+    )
+
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-uploaded_at"]
+
+    def save(self, *args, **kwargs):
+        if self.file:
+            self.size = self.file.size
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.original_name
