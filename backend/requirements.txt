@@ -1,0 +1,4 @@
+django-filter
+factory-boy
+drf-spectacular   # optionnel, schéma OpenAPI
+tzdata            # fuseaux horaires (Windows / images Docker minimales)
