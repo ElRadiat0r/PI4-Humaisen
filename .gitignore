@@ -11,11 +11,13 @@ env/
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 
-# Django
+# Django et bases de données
 db.sqlite3
+*.sqlite3
 staticfiles/
 media/
 
@@ -26,3 +28,4 @@ media/
 # Système
 .DS_Store
 Thumbs.db
+
